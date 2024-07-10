@@ -1,0 +1,16 @@
+App.code-workspace
+.vscode/
+
+*.91764
+
+App/Project/Listings/
+App/Project/Objects/
+App/Project/RTE/
+
+Boot/Project/Listings/
+Boot/Project/Objects/
+Boot/Project/RTE/
+
+JLinkLog.txt
+JLinkSettings.ini
+EventRecorderStub.scvd

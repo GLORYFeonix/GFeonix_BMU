@@ -366,16 +366,16 @@ void PcsCommTask(void *argument)
         {
             pcsComm_p[pcsIndex].func(TRANS_TX);
 
-            // uint32_t rxFlag;
-            // extern osEventFlagsId_t pcsRxEvent;
-            // rxFlag = osEventFlagsWait(pcsRxEvent, 0x00000001U, osFlagsWaitAny, 300);
-            // if (rxFlag != 0x00000001U)
-            // {
-            //     // communication error
-            //     continue;
-            // }
+            uint32_t rxFlag;
+            extern osEventFlagsId_t pcsRxEvent;
+            rxFlag = osEventFlagsWait(pcsRxEvent, 0x00000001U, osFlagsWaitAny, 300);
+            if (rxFlag != 0x00000001U)
+            {
+                // communication error
+                continue;
+            }
 
-            // pcsComm_p[pcsIndex].func(TRANS_RX);
+            pcsComm_p[pcsIndex].func(TRANS_RX);
             osDelay(10);
         }
     }

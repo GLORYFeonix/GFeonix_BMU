@@ -14,6 +14,8 @@ uint8_t txBuf3[128];
 uint8_t rxBuf3[256];
 static uart_t bmsUart;
 
+static uart_t *uartList[] = {&pcsUart, &upperUart, &iotUart, &bmsUart};
+
 void uart_Init(void)
 {
     UART0_Init();
@@ -321,9 +323,24 @@ void USART0_IRQHandler(void)
         dma_channel_disable(DMA0, DMA_CH4);
 
         uint32_t rxNum = dma_transfer_number_get(DMA0, DMA_CH4);
-        pcsUart.len = sizeof(rxBuf0) - rxNum;
-        memcpy(pcsUart.buf + pcsUart.index, rxBuf0, pcsUart.len);
-        pcsUart.index += pcsUart.len;
+        rxNum = sizeof(rxBuf0) - rxNum;
+        if (pcsUart.size + rxNum <= sizeof(pcsUart.buf))
+        {
+            if (pcsUart.tail + rxNum < sizeof(pcsUart.buf))
+            {
+                memcpy(&pcsUart.buf[pcsUart.tail], rxBuf0, rxNum);
+            }
+            else
+            {
+                uint16_t firLen = sizeof(pcsUart.buf) - pcsUart.tail;
+                uint16_t secLen = rxNum - firLen;
+                memcpy(&pcsUart.buf[pcsUart.tail], rxBuf0, firLen);
+                memcpy(pcsUart.buf, rxBuf0 + firLen, secLen);
+            }
+            pcsUart.tail += rxNum;
+            pcsUart.tail %= sizeof(pcsUart.buf);
+            pcsUart.size += rxNum;
+        }
         dma_transfer_number_config(DMA0, DMA_CH4, sizeof(rxBuf0));
         dma_channel_enable(DMA0, DMA_CH4);
 
@@ -335,7 +352,6 @@ void USART0_IRQHandler(void)
     {
         usart_flag_clear(USART0, USART_FLAG_TC);
 
-        pcsUart.index = 0;
         dma_channel_disable(DMA0, DMA_CH3);
         PCS_485_RX_ENABLE();
     }
@@ -366,21 +382,35 @@ void USART1_IRQHandler(void)
         dma_channel_disable(DMA0, DMA_CH5);
 
         uint32_t rxNum = dma_transfer_number_get(DMA0, DMA_CH5);
-        upperUart.len = sizeof(rxBuf1) - rxNum;
-        memcpy(upperUart.buf + upperUart.index, rxBuf1, upperUart.len);
-        upperUart.index += upperUart.len;
+        rxNum = sizeof(rxBuf1) - rxNum;
+        if (upperUart.size + rxNum <= sizeof(upperUart.buf))
+        {
+            if (upperUart.tail + rxNum < sizeof(upperUart.buf))
+            {
+                memcpy(&upperUart.buf[upperUart.tail], rxBuf1, rxNum);
+            }
+            else
+            {
+                uint16_t firLen = sizeof(upperUart.buf) - upperUart.tail;
+                uint16_t secLen = rxNum - firLen;
+                memcpy(&upperUart.buf[upperUart.tail], rxBuf1, firLen);
+                memcpy(upperUart.buf, rxBuf1 + firLen, secLen);
+            }
+            upperUart.tail += rxNum;
+            upperUart.tail %= sizeof(upperUart.buf);
+            upperUart.size += rxNum;
+        }
         dma_transfer_number_config(DMA0, DMA_CH5, sizeof(rxBuf1));
         dma_channel_enable(DMA0, DMA_CH5);
 
-        extern osEventFlagsId_t upperRxEvent;
-        osEventFlagsSet(upperRxEvent, 0x00000001U);
+        // extern osEventFlagsId_t upperRxEvent;
+        // osEventFlagsSet(upperRxEvent, 0x00000001U);
     }
 
     if (RESET != usart_interrupt_flag_get(USART1, USART_INT_FLAG_TC))
     {
         usart_flag_clear(USART1, USART_FLAG_TC);
 
-        upperUart.index = 0;
         dma_channel_disable(DMA0, DMA_CH6);
     }
 }
@@ -410,9 +440,24 @@ void USART2_IRQHandler(void)
         dma_channel_disable(DMA0, DMA_CH2);
 
         uint32_t rxNum = dma_transfer_number_get(DMA0, DMA_CH2);
-        iotUart.len = sizeof(rxBuf2) - rxNum;
-        memcpy(iotUart.buf + iotUart.index, rxBuf1, iotUart.len);
-        iotUart.index += iotUart.len;
+        rxNum = sizeof(rxBuf2) - rxNum;
+        if (iotUart.size + rxNum <= sizeof(iotUart.buf))
+        {
+            if (iotUart.tail + rxNum < sizeof(iotUart.buf))
+            {
+                memcpy(&iotUart.buf[iotUart.tail], rxBuf2, rxNum);
+            }
+            else
+            {
+                uint16_t firLen = sizeof(iotUart.buf) - iotUart.tail;
+                uint16_t secLen = rxNum - firLen;
+                memcpy(&iotUart.buf[iotUart.tail], rxBuf2, firLen);
+                memcpy(iotUart.buf, rxBuf2 + firLen, secLen);
+            }
+            iotUart.tail += rxNum;
+            iotUart.tail %= sizeof(iotUart.buf);
+            iotUart.size += rxNum;
+        }
         dma_transfer_number_config(DMA0, DMA_CH2, sizeof(rxBuf2));
         dma_channel_enable(DMA0, DMA_CH2);
 
@@ -424,7 +469,6 @@ void USART2_IRQHandler(void)
     {
         usart_flag_clear(USART2, USART_FLAG_TC);
 
-        iotUart.index = 0;
         dma_channel_disable(DMA0, DMA_CH1);
     }
 }
@@ -497,65 +541,44 @@ void uart_receive(uart_e uart, uint8_t *data, uint16_t num)
     switch (uart)
     {
     case PCS_UART:
-        for (i = 0; i < sizeof(pcsUart.buf) - (7 + num + 2); i++)
-        {
-            if (pcsUart.buf[i] == 0x5A && pcsUart.buf[i + 1] == 0xA5)
-            {
-                uint16_t crc = (pcsUart.buf[i + 7 + num + 1] << 8) | (pcsUart.buf[i + 7 + num] << 0);
-                if (crc == crc16_modbus(&pcsUart.buf[i + 2], 5 + num))
-                {
-                    memcpy(data, &pcsUart.buf[i + 7], num);
-                    break;
-                }
-            }
-        }
-        if (i == sizeof(pcsUart.buf) - (7 + num + 2))
-        {
-            memset(data, 0, num);
-        }
-        break;
-
+        // break;
     case UPPER_UART:
-        for (i = 0; i < sizeof(upperUart.buf) - (4 + num + 2); i++)
-        {
-            if (upperUart.buf[i] == 0x5A && upperUart.buf[i + 1] == 0xA5)
-            {
-                uint16_t dataLen = ((uint16_t)upperUart.buf[i + 6] << 8) | ((uint16_t)upperUart.buf[i + 5] << 0);
-                uint16_t crc = (upperUart.buf[i + 7 + dataLen + 1] << 8) | (upperUart.buf[i + 7 + dataLen] << 0);
-                if (crc == crc16_modbus(&upperUart.buf[i + 2], 5 + dataLen))
-                {
-                    memcpy(data, &upperUart.buf[i + 4], 3); // only service id and data length
-                    memcpy(upperData, &upperUart.buf[i + 7], dataLen);
-                    upperUart.index = 0;
-                    break;
-                }
-            }
-        }
-        if (i == sizeof(upperUart.buf) - (4 + num + 2))
-        {
-            memset(data, 0, num);
-        }
-        break;
-
+        // break;
     case IOT_UART:
-        for (i = 0; i < sizeof(iotUart.buf) - (4 + num + 2); i++)
+        while (uartList[uart]->size > 0)
         {
-            if (iotUart.buf[i] == 0x5A && iotUart.buf[i + 1] == 0xA5)
+            if (uartList[uart]->buf[uartList[uart]->head] == 0x5A && uartList[uart]->buf[(uartList[uart]->head + 1) % sizeof(uartList[uart]->buf)] == 0xA5)
             {
-                uint16_t dataLen = ((uint16_t)iotUart.buf[i + 6] << 8) | ((uint16_t)iotUart.buf[i + 5] << 0);
-                uint16_t crc = (iotUart.buf[i + 7 + dataLen + 1] << 8) | (iotUart.buf[i + 7 + dataLen] << 0);
-                if (crc == crc16_modbus(&iotUart.buf[i + 2], 5 + dataLen))
+                uint16_t dataLen = ((uint16_t)uartList[uart]->buf[(uartList[uart]->head + 6) % sizeof(uartList[uart]->buf)] << 8) | ((uint16_t)uartList[uart]->buf[(uartList[uart]->head + 5) % sizeof(uartList[uart]->buf)] << 0);
+                uint16_t crc = (uartList[uart]->buf[(uartList[uart]->head + 8 + dataLen) % sizeof(uartList[uart]->buf)] << 8) | (uartList[uart]->buf[(uartList[uart]->head + 7 + dataLen) % sizeof(uartList[uart]->buf)] << 0);
+                uint8_t tmpData[128]; // 要放下一帧最大长度
+                if (uartList[uart]->head + 6 + dataLen + 2 < sizeof(uartList[uart]->buf))
                 {
-                    memcpy(data, &iotUart.buf[i + 4], 3); // only service id and data length
-                    memcpy(upperData, &iotUart.buf[i + 7], dataLen);
-                    iotUart.index = 0;
+                    memcpy(tmpData, &uartList[uart]->buf[uartList[uart]->head], 7 + dataLen + 2);
+                    memset(&uartList[uart]->buf[uartList[uart]->head], 0x00, 7 + dataLen + 2); // debug
+                }
+                else
+                {
+                    uint16_t firLen = sizeof(uartList[uart]->buf) - uartList[uart]->head;
+                    uint16_t secLen = (uartList[uart]->head + 7 + dataLen + 2) % sizeof(uartList[uart]->buf);
+                    memcpy(tmpData, &uartList[uart]->buf[uartList[uart]->head], firLen);
+                    memcpy(tmpData + firLen, &uartList[uart]->buf[0], secLen);
+                    memset(&uartList[uart]->buf[uartList[uart]->head], 0x00, firLen); // debug
+                    memset(&uartList[uart]->buf[0], 0x00, secLen); // debug
+                }
+                if (crc == crc16_modbus(&tmpData[i + 2], 5 + dataLen))
+                {
+                    memcpy(data, &tmpData[4], 3 + dataLen);
+                    uartList[uart]->size -= (7 + dataLen + 2);
+                    uartList[uart]->head += (7 + dataLen + 2);
+                    uartList[uart]->head %= sizeof(uartList[uart]->buf);
                     break;
                 }
             }
-        }
-        if (i == sizeof(iotUart.buf) - (4 + num + 2))
-        {
-            memset(data, 0, num);
+            memset(&uartList[uart]->buf[uartList[uart]->head], 0x00, 1);
+            uartList[uart]->size--;
+            uartList[uart]->head++;
+            uartList[uart]->head %= sizeof(uartList[uart]->buf);
         }
         break;
 
@@ -564,12 +587,8 @@ void uart_receive(uart_e uart, uint8_t *data, uint16_t num)
         {
             if (bmsUart.buf[i] == 0xEA && bmsUart.buf[i + 1] == 0x00 && bmsUart.buf[i + 2] == 0x01 && bmsUart.buf[i + 3] == 0x01)
             {
-                // uint16_t crc = (bmsUart.buf[i + 7 + num + 1] << 8) | (bmsUart.buf[i + 7 + num] << 0);
-                // if (crc == crc16_modbus(&bmsUart.buf[i + 2], 5 + num))
-                // {
-                    memcpy(data, &bmsUart.buf[i], num);
-                    break;
-                // }
+                memcpy(data, &bmsUart.buf[i], num);
+                break;
             }
         }
         if (i == sizeof(bmsUart.buf) - 150)

@@ -33,9 +33,12 @@ typedef enum
 
 typedef struct
 {
-    uint16_t index;
+    uint16_t head;
+    uint16_t tail;
+    uint16_t size;
+    uint8_t buf[128];
     uint16_t len;
-    uint8_t buf[256];
+    uint16_t index;
 }uart_t;
 
 extern uint8_t txBuf0[128];
@@ -43,7 +46,7 @@ extern uint8_t rxBuf0[128];
 extern uint8_t txBuf1[128];
 extern uint8_t rxBuf1[128];
 extern uint8_t txBuf3[128];
-extern uint8_t rxBuf3[256];
+extern uint8_t rxBuf3[256]; // BMS一帧151字节
 
 void uart_Init(void);
 

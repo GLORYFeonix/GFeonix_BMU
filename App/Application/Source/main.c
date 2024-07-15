@@ -180,14 +180,6 @@ void TestTask(void *argument)
 
     while (1)
     {
-        // printf("Hi\n");
-        // uint8_t gzybuf[128];
-        // uart_receive(IOT_UART, gzybuf, 32);
-        // usart_data_transmit(USART2, 0xfe);
-        // osDelay(1000);
-        // gpio_bit_set(IOT_UART_TX_PORT, IOT_UART_TX_PIN);
-        // osDelay(1000);
-        // gpio_bit_reset(IOT_UART_TX_PORT, IOT_UART_TX_PIN);
         osDelay(1000);
     }
 }

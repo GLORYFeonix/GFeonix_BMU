@@ -20,14 +20,14 @@ void UpperCommTask(void *argument)
             continue;
         }
 
-        uint8_t serviceId[3];
-        uart_receive(UPPER_UART, serviceId, 3);
-        if (serviceId[0] == 0x00)
+        uint8_t buf[3];
+        uart_receive(UPPER_UART, buf, 3);
+        uint8_t serviceId = buf[0];
+        uint16_t dataLen = ((uint16_t)buf[1] << 8) | ((uint16_t)buf[2] << 0);
+        if (serviceId == 0x00)
         {
             continue;
         }
-
-        osDelay(5);
 
         memset(txBuf1, 0x00, sizeof(txBuf1));
         uint8_t len = 0;
@@ -36,11 +36,11 @@ void UpperCommTask(void *argument)
         txBuf1[len++] = 0xA5;
         txBuf1[len++] = 0xC0;
         txBuf1[len++] = 0xA0;
-        txBuf1[len++] = serviceId[0];
+        txBuf1[len++] = serviceId;
         txBuf1[len++] = (uint8_t)(UPPER_DATA_PER_FRAME >> 0);
         txBuf1[len++] = (uint8_t)(UPPER_DATA_PER_FRAME >> 8);
 
-        switch (serviceId[0])
+        switch (serviceId)
         {
         case 0x01:
             upper_SocSoh(&txBuf1[len]);

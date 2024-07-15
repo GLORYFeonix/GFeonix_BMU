@@ -45,6 +45,7 @@ static void bms_comm_data_rx(void)
     uint8_t data[160];
     memset(data, 0x00, sizeof(data)); // bms解包没写好，先全部复制
     bms_receive(sizeof(data), data);
+    bmsData.soh = data[51];
     bmsData.soc = data[52];
 }
 
